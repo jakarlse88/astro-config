@@ -31,7 +31,7 @@ return {
     formatting = {
       -- control auto formatting on save
       format_on_save = {
-        enabled = true, -- enable or disable format on save globally
+        enabled = false, -- enable or disable format on save globally
         allow_filetypes = { -- enable format on save for specified filetypes only
           -- "go",
         },
@@ -47,10 +47,6 @@ return {
       -- filter = function(client) -- fully override the default formatting function
       --   return true
       -- end
-    },
-    -- enable servers that you already have installed without mason
-    servers = {
-      -- "pyright"
     },
   },
 
@@ -69,17 +65,78 @@ return {
   -- augroups/autocommands and custom filetypes also this just pure lua so
   -- anything that doesn't fit in the normal config locations above can go here
   polish = function()
-    -- Set up custom filetypes
-    -- vim.filetype.add {
-    --   extension = {
-    --     foo = "fooscript",
-    --   },
-    --   filename = {
-    --     ["Foofile"] = "fooscript",
-    --   },
-    --   pattern = {
-    --     ["~/%.config/foo/.*"] = "fooscript",
-    --   },
-    -- }
+    local function yaml_ft(_, bufnr)
+      -- get content of buffer as string
+      local content = vim.filetype.getlines(bufnr)
+      if type(content) == "table" then content = table.concat(content, "\n") end
+
+      -- check for cloudformation specific properties
+      -- Look for 'apiVersion', 'kind', 'metadata', 'spec' all in the same file
+      local cfn_regex = vim.regex "Transform:*"
+      if cfn_regex and cfn_regex:match_str(content) then return "yaml.sam" end
+
+      -- return yaml if nothing else
+      return "yaml"
+    end
+
+    vim.filetype.add {
+      extension = {
+        yml = yaml_ft,
+        yaml = yaml_ft,
+      },
+    }
+
+    vim.api.nvim_create_autocmd("FileType", {
+      desc = "AWS SAM YAML language server",
+      group = vim.api.nvim_create_augroup("yaml_sam", { clear = true }),
+      pattern = "yaml.sam",
+      callback = function()
+        require("lspconfig").yamlls.setup(
+          require("astronvim.utils").extend_tbl(require("astronvim.utils.lsp").config "yamlls", {
+            settings = {
+              yaml = {
+                schemas = {
+                  ["https://raw.githubusercontent.com/awslabs/goformation/master/schema/sam.schema.json"] = "/*.{yaml,yml}"
+                  },
+
+                customTags = {
+                  "!Cidr",
+                  "!And",
+                  "!And sequence",
+                  "!If",
+                  "!If sequence",
+                  "!Not",
+                  "!Not sequence",
+                  "!Equals",
+                  "!Equals sequence",
+                  "!Or",
+                  "!Or sequence",
+                  "!GetAtt",
+                  "!GetAtt sequence",
+                  "!FindInMap",
+                  "!FindInMap sequence",
+                  "!Base64",
+                  "!Join",
+                  "!Join sequence",
+                  "!Ref",
+                  "!Sub",
+                  "!Sub sequence",
+                  "!GetAtt",
+                  "!GetAZs",
+                  "!ImportValue",
+                  "!ImportValue sequence",
+                  "!Select",
+                  "!Select sequence",
+                  "!Split",
+                  "!Split sequence"
+                  }
+              }
+            },
+
+            filetypes = { "yaml.sam" },
+          })
+        )
+      end,
+    })
   end,
 }
