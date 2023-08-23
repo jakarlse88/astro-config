@@ -70,10 +70,11 @@ return {
       local content = vim.filetype.getlines(bufnr)
       if type(content) == "table" then content = table.concat(content, "\n") end
 
-      -- check for cloudformation specific properties
-      -- Look for 'apiVersion', 'kind', 'metadata', 'spec' all in the same file
-      local cfn_regex = vim.regex "Transform:*"
-      if cfn_regex and cfn_regex:match_str(content) then return "yaml.sam" end
+      local sam_regex = vim.regex "Transform:.*Resources:*"
+      if sam_regex and sam_regex:match_str(content) then return "yaml.sam" end
+
+      local cfn_regex = vim.regex "Resources:*"
+      if cfn_regex and cfn_regex:match_str(content) then return "yaml.cfm" end
 
       -- return yaml if nothing else
       return "yaml"
@@ -85,6 +86,59 @@ return {
         yaml = yaml_ft,
       },
     }
+
+    vim.api.nvim_create_autocmd("FileType", {
+      desc = "AWS CloudFormation YAML language server",
+      group = vim.api.nvim_create_augroup("yaml_cfm", { clear = true }),
+      pattern = "yaml.cfm",
+      callback = function()
+        require("lspconfig").yamlls.setup(
+          require("astronvim.utils").extend_tbl(require("astronvim.utils.lsp").config "yamlls", {
+            settings = {
+              yaml = {
+                schemas = {
+                  [ "https://s3.amazonaws.com/cfn-resource-specifications-us-east-1-prod/schemas/2.15.0/all-spec.json" ] = "*-template.yaml"
+                  },
+
+                customTags = {
+                  "!Cidr",
+                  "!And",
+                  "!And sequence",
+                  "!If",
+                  "!If sequence",
+                  "!Not",
+                  "!Not sequence",
+                  "!Equals",
+                  "!Equals sequence",
+                  "!Or",
+                  "!Or sequence",
+                  "!GetAtt",
+                  "!GetAtt sequence",
+                  "!FindInMap",
+                  "!FindInMap sequence",
+                  "!Base64",
+                  "!Join",
+                  "!Join sequence",
+                  "!Ref",
+                  "!Sub",
+                  "!Sub sequence",
+                  "!GetAtt",
+                  "!GetAZs",
+                  "!ImportValue",
+                  "!ImportValue sequence",
+                  "!Select",
+                  "!Select sequence",
+                  "!Split",
+                  "!Split sequence"
+                  }
+              }
+            },
+
+            filetypes = { "yaml.cfm" },
+          })
+        )
+      end,
+    })
 
     vim.api.nvim_create_autocmd("FileType", {
       desc = "AWS SAM YAML language server",
